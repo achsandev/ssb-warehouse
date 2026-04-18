@@ -1,0 +1,8 @@
+@use 'vuetify/settings' with (
+    // Card
+    $card-text-padding: 1rem,
+
+    // Text Field
+    $text-field-input-padding-start: 0px,
+    $text-field-input-padding-end: 0px
+)

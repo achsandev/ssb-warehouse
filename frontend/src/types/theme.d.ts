@@ -1,0 +1,1 @@
+type ThemePreferences = 'light' | 'dark' | 'system'

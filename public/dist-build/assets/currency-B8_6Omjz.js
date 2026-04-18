@@ -1,0 +1,1 @@
+const m=r=>{if(!r&&r!==0)return"Rp 0";const t=Math.floor(Number(r));return isNaN(t)?"Rp 0":new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",minimumFractionDigits:0,maximumFractionDigits:0}).format(t)};export{m as f};

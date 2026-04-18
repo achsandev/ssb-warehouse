@@ -1,0 +1,1 @@
+import{f as s}from"./main-Pij2Ocqr.js";const e=async()=>{const{data:t}=await s.get("/lookup/purchase_orders"),{data:a,...o}=t;return{data:a,...o}},c=async t=>{const{data:a}=await s.get(`/lookup/purchase_orders/${t}`);return a?.data??a};export{e as g,c as s};
