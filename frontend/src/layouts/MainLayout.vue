@@ -57,6 +57,7 @@ import IcRoundAdminPanelSettings from '~icons/ic/round-admin-panel-settings'
 import CarbonDeliverySettings from '~icons/carbon/delivery-settings'
 import HugeiconsDashboardSquareSetting from '~icons/hugeicons/dashboard-square-setting'
 import MaterialSymbolsFunction from '~icons/material-symbols/function'
+import MdiApi from '~icons/mdi/api'
 // Import Stores
 import { useMessageStore } from '@/stores/message'
 import { useAuthStore } from '@/stores/auth'
@@ -181,7 +182,8 @@ const items = computed(() => [
         props: { link: true, rounded: 'xl', density: 'compact', prependIcon: IcRoundAdminPanelSettings, class: 'mb-1' },
         children: [
             { title: t('userManagement'), props: { link: true, to: '/management/users', rounded: 'xl', density: 'compact', prependIcon: TdesignUserSettingFilled, class: 'mb-1' }, show: can('read', 'user_management') },
-            { title: t('roleManagement'), props: { link: true, to: '/management/roles', rounded: 'xl', density: 'compact', prependIcon: IcRoundSettingsAccessibility, class: 'mb-1' }, show: can('read', 'role_management') }
+            { title: t('roleManagement'), props: { link: true, to: '/management/roles', rounded: 'xl', density: 'compact', prependIcon: IcRoundSettingsAccessibility, class: 'mb-1' }, show: can('read', 'role_management') },
+            { title: t('apiClient'), props: { link: true, to: '/management/api_clients', rounded: 'xl', density: 'compact', prependIcon: MdiApi, class: 'mb-1' }, show: can('read', 'api_client') }
         ]
     }
 ])

@@ -9,6 +9,7 @@ import FluentTextChangeReject20Regular from '~icons/fluent/text-change-reject-20
 import SolarListCheckBold from '~icons/solar/list-check-bold'
 import FluentNotepad24Filled from '~icons/fluent/notepad-24-filled'
 import MdiWarehouse from '~icons/mdi/warehouse'
+import MdiKeyVariant from '~icons/mdi/key-variant'
 // Import Composables
 import { useTranslate } from '@/composables/useTranslate'
 
@@ -44,6 +45,7 @@ const ACTION_ICON: Record<string, IconLike> = {
     reject:           FluentTextChangeReject20Regular,
     revision:         FluentNotepad24Filled,
     manage_rack_tank: MdiWarehouse,
+    manage_token:     MdiKeyVariant,
 }
 
 const iconFor = (action: string): IconLike =>

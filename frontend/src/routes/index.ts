@@ -51,6 +51,7 @@ const DemandRateReport = () => import('@/modules/reports/demandratereport/pages/
 const LeadTimeReport = () => import('@/modules/reports/leadtimereport/pages/LeadTimeReport.vue')
 const SettingPurchaseOrderApproval = () => import('@/modules/settingpurchaseorderapproval/pages/SettingPurchaseOrderApproval.vue')
 const SettingDppFormula = () => import('@/modules/settingdppformula/pages/SettingDppFormula.vue')
+const ApiClient = () => import('@/modules/apiclient/pages/ApiClient.vue')
 const Forbidden = () => import('@/modules/error/pages/Forbidden.vue')
 
 const routes = [
@@ -163,6 +164,7 @@ const routes = [
                 children: [
                     { path: 'users', name: 'UserManagement', component: UserManagement, meta: { title: 'userManagement', requiresAuth: true, ability: { action: 'read', subject: 'user_management' } } },
                     { path: 'roles', name: 'RoleManagement', component: RoleManagement, meta: { title: 'roleManagement', requiresAuth: true, ability: { action: 'read', subject: 'role_management' } } },
+                    { path: 'api_clients', name: 'ApiClient', component: ApiClient, meta: { title: 'apiClient', requiresAuth: true, ability: { action: 'read', subject: 'api_client' } } },
                 ]
             }
         ]

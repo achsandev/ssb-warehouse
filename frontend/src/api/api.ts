@@ -4,43 +4,50 @@ import { useMessageStore } from '@/stores/message'
 import { resetIdleTimer } from '@/composables/useIdleTimeout'
 import axios from 'axios'
 
+/**
+ * Axios instance untuk SPA stateful (cookie session).
+ *
+ *   `withCredentials: true`  → kirim cookie session HttpOnly + XSRF-TOKEN
+ *                              ke setiap request same-origin / cross-origin
+ *                              yang di-allowlist Sanctum.
+ *   `xsrfCookieName`         → axios membaca cookie `XSRF-TOKEN` yang
+ *                              di-set Sanctum, lalu mengirim balik sebagai
+ *                              header `X-XSRF-TOKEN` yang divalidasi
+ *                              `VerifyCsrfToken` middleware Laravel.
+ *
+ * Tidak ada Bearer token yang di-attach manual — token disimpan oleh
+ * browser dalam cookie HttpOnly yang TIDAK bisa diakses JavaScript
+ * (defense terhadap XSS).
+ */
 export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
-    // Kirim session cookie + XSRF-TOKEN cookie pada setiap request same-origin.
-    // Axios akan otomatis membaca cookie `XSRF-TOKEN` dan mengirimkannya sebagai
-    // header `X-XSRF-TOKEN`, yang divalidasi oleh middleware VerifyCsrfToken Laravel.
     withCredentials: true,
     xsrfCookieName: 'XSRF-TOKEN',
     xsrfHeaderName: 'X-XSRF-TOKEN',
 })
 
 /**
- * Inisialisasi cookie CSRF dari Sanctum sebelum request state-mutating (POST/PUT/DELETE)
- * pertama kali dilakukan — khususnya login.
+ * Inisialisasi cookie CSRF dari Sanctum sebelum request state-mutating
+ * (POST/PUT/DELETE) pertama kali — khususnya login.
  *
  * Endpoint `/sanctum/csrf-cookie` di-serve oleh Sanctum dan hanya men-set
- * cookie XSRF-TOKEN + session cookie (tidak ada body response). Aman dipanggil
- * berulang kali karena idempotent.
+ * cookie XSRF-TOKEN + session cookie (tidak ada body response). Idempotent
+ * — aman dipanggil berulang.
  */
 export const initCsrf = async (): Promise<void> => {
     await axios.get('/sanctum/csrf-cookie', { withCredentials: true })
 }
 
-api.interceptors.request.use((config) => {
-    const auth = localStorage.getItem('auth')
-    const parsed = auth ? JSON.parse(auth) : null
-    const token = parsed?.token
-
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-    }
-
-    config.headers.Accept = 'application/json'
-
-    return config
-}, (error) => {
-    return Promise.reject(error)
-})
+api.interceptors.request.use(
+    (config) => {
+        // Header Accept JSON eksplisit — supaya Laravel tahu request expect
+        // JSON response (mengaktifkan Sanctum stateful detection + JSON 401
+        // alih-alih HTML redirect untuk request unauthenticated).
+        config.headers.Accept = 'application/json'
+        return config
+    },
+    (error) => Promise.reject(error),
+)
 
 api.interceptors.response.use(
     (response) => {
@@ -51,23 +58,18 @@ api.interceptors.response.use(
         const status = error.response?.status
 
         if (status === 401) {
-            const code = error.response?.data?.code
-            const isSessionExpired = code === 'SESSION_EXPIRED'
-
             const message = useMessageStore()
             message.setMessage({
-                text: isSessionExpired
-                    ? 'Sesi Anda telah berakhir karena tidak ada aktivitas. Silakan login kembali.'
-                    : 'Sesi tidak valid. Silakan login kembali.',
+                text: 'Sesi Anda telah berakhir. Silakan login kembali.',
                 timeout: 4000,
-                color: 'warning'
+                color: 'warning',
             })
 
-            // Hapus session + localStorage tanpa hit API signout (token sudah invalid).
+            // Cookie sudah invalid di server — clear state lokal, redirect
+            // ke signin tanpa hit API logout.
             const auth = useAuthStore()
             auth.clearSession()
 
-            // Hindari redirect dobel jika sudah di halaman signin.
             if (router.currentRoute.value.path !== '/auth/signin') {
                 router.push('/auth/signin')
             }
@@ -78,5 +80,5 @@ api.interceptors.response.use(
         }
 
         return Promise.reject(error)
-    }
+    },
 )

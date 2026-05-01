@@ -1,0 +1,831 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "SSB Warehouse API",
+        "description": "API stateless untuk integrasi third-party dengan modul manajemen gudang SSB. Semua endpoint butuh Bearer token (Personal Access Token Sanctum) yang dibuat lewat panel admin internal. Rate limit default 60 request/menit per kombinasi IP+token. Semua timestamp dikirim dalam ISO 8601 UTC.",
+        "contact": {
+            "name": "SSB IT Integration",
+            "email": "ict.integration@kalla.co.id"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Environment aktif"
+        }
+    ],
+    "paths": {
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Revoke current Personal Access Token",
+                "description": "Menghapus token Sanctum yang sedang dipakai. Endpoint ini idempotent — panggilan berulang dengan token yang sama tetap mengembalikan 200, meski token sudah tidak valid setelah panggilan pertama.",
+                "operationId": "apiLogout",
+                "responses": {
+                    "200": {
+                        "description": "Logout berhasil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Logout berhasil"
+                                        },
+                                        "data": {
+                                            "type": "string",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "string",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — token tidak valid / sudah revoked",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/items": {
+            "get": {
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Daftar item (pagination)",
+                "description": "Mengembalikan daftar master item dengan dukungan search, sort, dan pagination. Memerlukan Bearer token serta permission `items.read`.",
+                "operationId": "listItems",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 10,
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "sort_by",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "created_at",
+                            "enum": [
+                                "code",
+                                "name",
+                                "brand_name",
+                                "item_category_name",
+                                "unit_name",
+                                "min_qty",
+                                "price",
+                                "created_at",
+                                "updated_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "sort_dir",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Cari di code, name, atau part_number (max 120 char)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 120
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Sukses",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "List of items"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Item"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "string",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/PaginationMeta"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — permission items.read tidak dimiliki",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/items/{uid}": {
+            "get": {
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Detail item",
+                "description": "Mengembalikan satu item berdasarkan UUID. Menghindari enumerasi ID numerik yang bisa dipakai scanning.",
+                "operationId": "getItemByUid",
+                "parameters": [
+                    {
+                        "name": "uid",
+                        "in": "path",
+                        "description": "UUID item",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Sukses",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Item detail"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Item"
+                                        },
+                                        "errors": {
+                                            "type": "string",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Item tidak ditemukan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/item-requests": {
+            "post": {
+                "tags": [
+                    "Item Requests"
+                ],
+                "summary": "Buat Item Request baru",
+                "description": "Membuat permintaan barang baru dengan status awal `Waiting Approval`. Identifier warehouse, item, dan unit memakai UUID, bukan ID numerik — cegah enumerasi. Operasi transactional: bila pembuatan header berhasil tapi detail gagal, seluruh data di-rollback.",
+                "operationId": "storeItemRequest",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "requirement",
+                                    "request_date",
+                                    "warehouse_uid",
+                                    "is_project",
+                                    "department_name",
+                                    "details"
+                                ],
+                                "properties": {
+                                    "requirement": {
+                                        "type": "string",
+                                        "example": "Replenishment",
+                                        "enum": [
+                                            "Direct Use",
+                                            "Replenishment"
+                                        ]
+                                    },
+                                    "request_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-04-19"
+                                    },
+                                    "unit_code": {
+                                        "type": "string",
+                                        "example": "UNIT-01",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "wo_number": {
+                                        "type": "string",
+                                        "example": "WO-2026-045",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "warehouse_uid": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "is_project": {
+                                        "type": "boolean",
+                                        "example": true
+                                    },
+                                    "project_name": {
+                                        "type": "string",
+                                        "example": "Maintenance Crusher A",
+                                        "nullable": true,
+                                        "maxLength": 255
+                                    },
+                                    "department_name": {
+                                        "type": "string",
+                                        "example": "Maintenance",
+                                        "maxLength": 255
+                                    },
+                                    "details": {
+                                        "type": "array",
+                                        "items": {
+                                            "required": [
+                                                "item_uid",
+                                                "unit_uid",
+                                                "qty"
+                                            ],
+                                            "properties": {
+                                                "item_uid": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "unit_uid": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "qty": {
+                                                    "type": "integer",
+                                                    "example": 5,
+                                                    "maximum": 999999,
+                                                    "minimum": 1
+                                                },
+                                                "description": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "maxLength": 500
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "maxItems": 100,
+                                        "minItems": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Item request berhasil dibuat",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Item request created successfully"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/ItemRequest"
+                                        },
+                                        "errors": {
+                                            "type": "string",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — permission `item_request.create` tidak dimiliki",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ItemRequest": {
+                "required": [
+                    "uid",
+                    "request_number",
+                    "status"
+                ],
+                "properties": {
+                    "uid": {
+                        "description": "Representasi Item Request untuk konsumen API publik.\n\nBerbeda dengan resource internal:\n  - Tidak membawa internal IDs atau data approver internal.\n  - Timestamp dalam ISO 8601 UTC (cross-timezone safe).\n  - Relation minimal — hanya field yang relevan untuk partner.",
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "request_number": {
+                        "type": "string",
+                        "example": "PB.04.2026.000123"
+                    },
+                    "requirement": {
+                        "type": "string",
+                        "enum": [
+                            "Direct Use",
+                            "Replenishment"
+                        ]
+                    },
+                    "request_date": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2026-04-19"
+                    },
+                    "unit_code": {
+                        "type": "string",
+                        "example": "UNIT-01",
+                        "nullable": true
+                    },
+                    "wo_number": {
+                        "type": "string",
+                        "example": "WO-2026-045",
+                        "nullable": true
+                    },
+                    "warehouse": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "is_project": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "example": "Maintenance Crusher A",
+                        "nullable": true
+                    },
+                    "department_name": {
+                        "type": "string",
+                        "example": "Maintenance"
+                    },
+                    "status": {
+                        "type": "string",
+                        "example": "Waiting Approval"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ItemRequestDetail"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "created_by_name": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ItemRequestDetail": {
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "item": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "code": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "unit": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "symbol": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "qty": {
+                        "type": "integer",
+                        "example": 5
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "Item": {
+                "required": [
+                    "uid",
+                    "code",
+                    "name"
+                ],
+                "properties": {
+                    "uid": {
+                        "description": "Representasi `Items` untuk konsumen API publik.\n\nBerbeda dengan `ItemsResource` internal yang dipakai SPA:\n - Tidak membawa kolom internal (`id`, `*_id`, `*_by_id`).\n - Tidak men-generate barcode SVG (mahal & tidak relevan untuk API).\n - URL gambar dipaksa absolut dengan base host `config('app.url')` supaya\n   aman dikonsumsi dari domain lain.\n - Tanggal dalam ISO 8601 UTC untuk kompatibilitas cross-timezone.",
+                        "type": "string",
+                        "format": "uuid",
+                        "example": "7c8b0a0e-7f3f-4e2e-9b9a-1a1a1a1a1a1a"
+                    },
+                    "code": {
+                        "type": "string",
+                        "example": "OIL-001-0001"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Oli Mesin SAE 10W-40"
+                    },
+                    "part_number": {
+                        "type": "string",
+                        "example": "SAE-10W40-A",
+                        "nullable": true
+                    },
+                    "interchange_part": {
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "min_qty": {
+                        "type": "integer",
+                        "example": 10
+                    },
+                    "price": {
+                        "type": "string",
+                        "example": "150000",
+                        "nullable": true
+                    },
+                    "image": {
+                        "type": "string",
+                        "format": "uri",
+                        "example": "https://warehouse.ssb.co.id/storage/items/xyz.png",
+                        "nullable": true
+                    },
+                    "brand": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "category": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "unit": {
+                        "properties": {
+                            "uid": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "symbol": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ErrorEnvelope": {
+                "properties": {
+                    "success": {
+                        "description": "Kontainer metadata OpenAPI 3 untuk API publik SSB Warehouse.\n\nClass ini TIDAK dipakai saat runtime — hanya berfungsi sebagai tempat\nberlabuh PHP 8 Attributes yang dipindai oleh `zircote/swagger-php`\n(via paket `darkaonline/l5-swagger`) saat `php artisan l5-swagger:generate`\ndijalankan. Syntax Attribute dipilih karena merupakan bentuk primer di\nswagger-php 6.x (docblock mulai deprecated).\n\nPerintah generate:\n  php artisan l5-swagger:generate\n\nUI tersedia di `/api/documentation`.",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Unauthorized."
+                    },
+                    "data": {
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "errors": {
+                        "type": "object",
+                        "example": {
+                            "field": [
+                                "Validation error message."
+                            ]
+                        },
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "PaginationMeta": {
+                "properties": {
+                    "current_page": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "per_page": {
+                        "type": "integer",
+                        "example": 10
+                    },
+                    "total": {
+                        "type": "integer",
+                        "example": 125
+                    },
+                    "last_page": {
+                        "type": "integer",
+                        "example": 13
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "description": "Kirim header `Authorization: Bearer {token}`. Token diterbitkan oleh admin lewat fitur Personal Access Tokens.",
+                "bearerFormat": "Sanctum PAT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Auth",
+            "description": "Token lifecycle — revoke / refresh Personal Access Token."
+        },
+        {
+            "name": "Items",
+            "description": "Master barang & jasa — read-only dari sisi API publik."
+        },
+        {
+            "name": "Item Requests",
+            "description": "Permintaan barang (Item Request) — create dari sistem eksternal."
+        }
+    ]
+}
