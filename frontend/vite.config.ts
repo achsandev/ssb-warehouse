@@ -96,52 +96,50 @@ export default defineConfig({
       },
       output: {
         /**
-         * Manual chunking — memisahkan vendor berat ke chunk sendiri supaya:
-         *  - Parallel download saat initial load.
-         *  - Cache lebih tahan lama: vendor jarang berubah, chunk app yang
-         *    sering berubah tidak ikut invalidate cache user.
-         *  - Mengurangi ukuran main bundle.
+         * Manual chunking — split per LIBRARY, bukan per sub-direktori.
          *
-         * Untuk Vuetify, splitting dibuat lebih granular:
-         *  - `vendor-vuetify-labs`    : komponen lab (VFileUpload, dsb).
-         *  - `vendor-vuetify-tables`  : VDataTable & VDataTableServer (berat).
-         *  - `vendor-vuetify-inputs`  : VAutocomplete/VTextField/VSelect family.
-         *  - `vendor-vuetify`         : core & komponen layout sisanya.
+         * Pelajaran dari TDZ error sebelumnya (`Cannot access 'et' before
+         * initialization`): membagi satu library (mis. Vuetify) ke beberapa
+         * chunk berbeda BERBAHAYA karena Vuetify punya circular dependency
+         * antar komponen (VDataTable internally pakai VAutocomplete, dst).
+         * Saat chunk loading order tidak deterministik, variable di-akses
+         * sebelum module parent-nya ter-initialize → TDZ.
          *
-         * Library kecil (dayjs, axios, iconify JSON) dibiarkan ikut chunk
-         * default Rollup — splitting terlalu granular justru menambah
-         * overhead HTTP tanpa manfaat ukuran.
+         * Aturan aman:
+         *   - Satu library = satu chunk.
+         *   - Group library dengan dependency tight (vue + router + pinia)
+         *     ke chunk yang sama supaya pasti ter-initialize bersama.
+         *   - Library independent (charts, math) boleh chunk sendiri.
          */
         manualChunks: (id: string): string | undefined => {
           if (!id.includes('node_modules')) return undefined
 
-          // Vuetify split bertingkat — cek path paling spesifik dulu.
-          if (id.includes('vuetify/lib/labs/') || id.includes('vuetify/labs/')) {
-            return 'vendor-vuetify-labs'
-          }
-          if (/vuetify\/lib\/components\/(VData|VVirtual)/.test(id)) {
-            return 'vendor-vuetify-tables'
-          }
-          if (
-            /vuetify\/lib\/components\/(VAutocomplete|VCombobox|VSelect|VTextField|VTextarea|VFileInput|VOtpInput|VNumberInput)/.test(id)
-          ) {
-            return 'vendor-vuetify-inputs'
-          }
+          // Seluruh Vuetify dalam SATU chunk — wajib karena cross-component deps.
           if (id.includes('vuetify')) return 'vendor-vuetify'
 
+          // ag-charts standalone, tidak ada cross-deps berbahaya.
           if (id.includes('ag-charts')) return 'vendor-charts'
-          if (id.includes('mathjs') || id.includes('decimal.js') || id.includes('complex.js') || id.includes('fraction.js')) {
-            return 'vendor-math'
-          }
-          if (id.includes('vee-validate') || id.includes('yup')) return 'vendor-validation'
-          if (id.includes('@casl')) return 'vendor-casl'
+
+          // mathjs ekosistem (mathjs + dependency-nya).
           if (
-            id.includes('vue-router')
+            id.includes('mathjs')
+            || id.includes('decimal.js')
+            || id.includes('complex.js')
+            || id.includes('fraction.js')
+          ) return 'vendor-math'
+
+          // Vue core stack — vue, router, pinia, vueuse digabung supaya
+          // urutan initialize-nya konsisten (pinia & router butuh vue).
+          if (
+            /node_modules\/vue(\/|$)/.test(id)
+            || id.includes('vue-router')
             || id.includes('pinia')
             || id.includes('@vueuse')
-            || /node_modules\/vue(\/|$)/.test(id)
           ) return 'vendor-vue'
 
+          // Library kecil (dayjs, axios, casl, vee-validate, yup, dsb)
+          // dibiarkan ikut chunk default Rollup — splitting terlalu granular
+          // justru menambah HTTP overhead tanpa manfaat ukuran.
           return undefined
         },
       },

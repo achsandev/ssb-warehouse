@@ -1,1 +1,0 @@
-import{U as r,a2 as t,a1 as o,v as a}from"./vendor-vue-CuY1uC46.js";const l={viewBox:"0 0 24 24",width:"1.2em",height:"1.2em"};function n(s,e){return t(),o("svg",l,[...e[0]||(e[0]=[a("path",{fill:"currentColor",d:"M20 11v2H8l5.5 5.5l-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5L8 11z"},null,-1)])])}const m=r({name:"mdi-arrow-left",render:n});export{m as M};

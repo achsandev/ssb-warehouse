@@ -31,9 +31,12 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          # Lockfile ada di root — kalau belum di-commit, hapus baris ini
+          # sementara, atau jalankan `npm install` lokal lalu commit lockfile.
+          cache-dependency-path: package-lock.json
 
       - name: Install Node Dependencies
-        run: npm i
+        run: npm ci
 
       - name: Add Flux Credentials Loaded From ENV
         run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
