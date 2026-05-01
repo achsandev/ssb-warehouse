@@ -36,9 +36,12 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('nosu')->group(function () {
     Route::post('/signin', [AuthController::class, 'signin']);
     Route::post('/signup', [AuthController::class, 'signup']);
-    Route::post('/jwt-login', [AuthController::class, 'jwtLogin']);
 
-    Route::middleware(['auth:sanctum', 'check_token_idle'])->group(function () {
+    // `check_token_idle` di-drop dari group ini — SPA sekarang pakai cookie
+    // session yang idle-nya di-handle native oleh `SESSION_LIFETIME` (sliding).
+    // Middleware tetap tersedia di alias untuk endpoint PAT third-party kalau
+    // suatu saat dibutuhkan.
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/signout', [AuthController::class, 'signout']);
 
@@ -378,10 +381,28 @@ Route::prefix('nosu')->group(function () {
         Route::get('/lookup/setting_approver_item_request', [\App\Http\Controllers\Lookup\SettingApproverItemRequestLookupController::class, 'index']);
 
         Route::get('/lookup/setting_dpp_formula', [\App\Http\Controllers\Lookup\SettingDppFormulaLookupController::class, 'index']);
+
+        // ── API Client management (admin only) ───────────────────────────
+        Route::get('/api_clients', [\App\Http\Controllers\ApiClientController::class, 'index'])
+            ->middleware('custom_permission:api_client.read');
+        Route::get('/api_clients/{uid}', [\App\Http\Controllers\ApiClientController::class, 'show'])
+            ->middleware('custom_permission:api_client.read');
+        Route::post('/api_clients', [\App\Http\Controllers\ApiClientController::class, 'store'])
+            ->middleware('custom_permission:api_client.create');
+        Route::put('/api_clients/{uid}', [\App\Http\Controllers\ApiClientController::class, 'update'])
+            ->middleware('custom_permission:api_client.update');
+        Route::delete('/api_clients/{uid}', [\App\Http\Controllers\ApiClientController::class, 'destroy'])
+            ->middleware('custom_permission:api_client.delete');
+
+        // Token lifecycle — generate (replace lama) & delete (revoke).
+        Route::post('/api_clients/{uid}/token', [\App\Http\Controllers\ApiClientTokenController::class, 'generate'])
+            ->middleware('custom_permission:api_client.manage_token');
+        Route::delete('/api_clients/{uid}/token', [\App\Http\Controllers\ApiClientTokenController::class, 'destroy'])
+            ->middleware('custom_permission:api_client.manage_token');
     });
 
 });
 
 Route::view('{path}', 'app')
-    ->where('path', '^(?!spa|dist|storage|fonts|img|i18n.json).*$')
+    ->where('path', '^(?!api|spa|dist|storage|fonts|img|i18n.json).*$')
     ->name('main');

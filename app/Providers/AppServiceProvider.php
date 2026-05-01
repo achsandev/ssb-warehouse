@@ -87,6 +87,10 @@ use App\Observers\CashPurchaseObserver;
 use App\Observers\WarehouseCashRequestObserver;
 use App\Observers\WarehouseObserver;
 // Others
+use App\Models\ApiClient;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -147,5 +151,25 @@ class AppServiceProvider extends ServiceProvider
         WarehouseCashRequest::observe(WarehouseCashRequestObserver::class);
         CashPayment::observe(CashPaymentObserver::class);
         CashPurchase::observe(CashPurchaseObserver::class);
+
+        // Rate limiter khusus API partner (Skenario A — B2B server-to-server).
+        // Besaran limit dibaca dari kolom `api_clients.rate_limit_per_minute`
+        // supaya bisa di-tune per-partner tanpa deploy kode.
+        RateLimiter::for('api-client', function (Request $request) {
+            $tokenable = $request->user();
+            $token = $request->user()?->currentAccessToken();
+
+            if ($tokenable instanceof ApiClient) {
+                return Limit::perMinute($tokenable->rate_limit_per_minute ?: 60)
+                    ->by('api-client:'.$tokenable->id);
+            }
+
+            // Fallback: tokenable lain (user internal, dsb.) atau anonim.
+            $key = $token?->id
+                ? 'token:'.$token->id
+                : 'ip:'.$request->ip();
+
+            return Limit::perMinute(60)->by($key);
+        });
     }
 }

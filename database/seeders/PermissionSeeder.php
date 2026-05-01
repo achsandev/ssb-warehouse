@@ -201,6 +201,13 @@ class PermissionSeeder extends Seeder
             'cash_purchase.update',
             'cash_purchase.delete',
             'cash_purchase.approve',
+
+            // API Client (third-party integrations)
+            'api_client.read',
+            'api_client.create',
+            'api_client.update',
+            'api_client.delete',
+            'api_client.manage_token',
         ];
 
         // ================================
