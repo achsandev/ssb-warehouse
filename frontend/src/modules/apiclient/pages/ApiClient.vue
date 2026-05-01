@@ -119,7 +119,7 @@ const handleOpenDetailDialog = (item: ApiClientList) => {
         { key: 'apiClientExpiresAt', value: item.token?.expires_at ? formatDate(item.token.expires_at) : t('apiClientNeverExpires') },
         { key: 'createdAt', value: formatDate(item.created_at) },
         { key: 'createdBy', value: item.created_by_name ?? '-' },
-        { key: 'updatedAt', value: formatDate(item.updated_at) },
+        { key: 'updatedAt', value: formatDate(item.updated_at ?? undefined) },
         { key: 'updatedBy', value: item.updated_by_name ?? '-' },
     ]
     detailDialog.value = true
