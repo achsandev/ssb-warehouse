@@ -1,1 +1,0 @@
-import{f as s}from"./main-B-mIJ4zq.js";const r=async()=>{const{data:t}=await s.get("/lookup/item_requests"),{data:a,...e}=t;return{data:a,...e}},n=async t=>{const{data:a}=await s.get(`/lookup/item_requests/${t}`);return a?.data??a};export{r as g,n as s};

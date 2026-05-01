@@ -1,1 +1,0 @@
-import{U as o,a2 as n,a1 as s,v as t}from"./vendor-vue-CuY1uC46.js";const r={viewBox:"0 0 21 21",width:"1.2em",height:"1.2em"};function a(l,e){return n(),s("svg",r,[...e[0]||(e[0]=[t("path",{fill:"none",stroke:"currentColor","stroke-linecap":"round","stroke-linejoin":"round",d:"m7.5 7.5l6 6m0-6l-6 6"},null,-1)])])}const c=o({name:"system-uicons-close",render:a});export{c as S};
