@@ -99,7 +99,7 @@ const options = ref<TableParams>({
 const headers = computed<DataTableHeader[]>(() => [
     { title: t('actions'), key: 'action', align: 'center', width: '20', sortable: false },
     { title: t('requestNumber'), key: 'request_number', align: 'start', nowrap: true },
-    { title: t('woNumber'), key: 'wo_number', align: 'start', nowrap: true },
+    { title: t('wrWoNumber'), key: 'wo_number', align: 'start', nowrap: true },
     { title: t('projectName'), key: 'project_name', align: 'start', nowrap: true },
     { title: t('departmentName'), key: 'department_name', align: 'start', nowrap: true },
     { title: t('requestDate'), key: 'request_date', align: 'start', nowrap: true },

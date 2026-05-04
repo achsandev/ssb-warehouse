@@ -19,6 +19,7 @@ class ItemUsage extends Model
         'usage_date',
         'usage_number',
         'project_name',
+        'recipient_name',
         'status',
         'created_by_id',
         'created_by_name',

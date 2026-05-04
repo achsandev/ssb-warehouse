@@ -32,6 +32,7 @@ class ItemUsageController extends Controller
             'usage_number',
             'usage_date',
             'project_name',
+            'recipient_name',
             'status',
             'created_at',
         ];
@@ -47,6 +48,7 @@ class ItemUsageController extends Controller
             'usage_date',
             'item_request_id',
             'project_name',
+            'recipient_name',
             'status',
             'created_at',
             'updated_at',
@@ -55,15 +57,16 @@ class ItemUsageController extends Controller
         ];
 
         $query = ItemUsage::with([
-            'itemRequest:id,uid,request_number',
-            'details.item:id,uid,name',
+            'itemRequest:id,uid,request_number,department_name,unit_code,wo_number,is_project',
+            'details.item:id,uid,name,code,part_number,price',
             'details.unit:id,uid,name,symbol',
         ]);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('usage_number', 'like', "{$search}%")
-                    ->orWhere('project_name', 'like', "{$search}%");
+                    ->orWhere('project_name', 'like', "{$search}%")
+                    ->orWhere('recipient_name', 'like', "{$search}%");
             });
         }
 
@@ -87,8 +90,8 @@ class ItemUsageController extends Controller
     public function show(string $uid): JsonResponse
     {
         $itemUsage = ItemUsage::with([
-            'itemRequest:id,uid,request_number',
-            'details.item:id,uid,name',
+            'itemRequest:id,uid,request_number,department_name,unit_code,wo_number,is_project',
+            'details.item:id,uid,name,code,part_number,price',
             'details.unit:id,uid,name,symbol',
         ])->where('uid', $uid)->firstOrFail();
 
@@ -106,8 +109,9 @@ class ItemUsageController extends Controller
 
         $itemUsage = ItemUsage::create([
             'item_request_id' => $itemRequest->id,
-            'usage_date' => $request->input('usage_date'),
-            'project_name' => $request->input('project_name'),
+            'usage_date'      => $request->input('usage_date'),
+            'project_name'    => $request->input('project_name'),
+            'recipient_name'  => $request->input('recipient_name'),
         ]);
 
         $this->syncDetails($itemUsage, $request->input('details'));
@@ -133,9 +137,10 @@ class ItemUsageController extends Controller
         DB::transaction(function () use ($itemUsage, $itemRequest, $request, $previousStatus, $newStatus) {
             $itemUsage->update([
                 'item_request_id' => $itemRequest->id,
-                'usage_date' => $request->input('usage_date'),
-                'project_name' => $request->input('project_name'),
-                'status' => $newStatus,
+                'usage_date'      => $request->input('usage_date'),
+                'project_name'    => $request->input('project_name'),
+                'recipient_name'  => $request->input('recipient_name'),
+                'status'          => $newStatus,
             ]);
 
             // Replace details, get back resolved ids for stock deduction

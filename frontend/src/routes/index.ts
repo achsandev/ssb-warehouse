@@ -52,6 +52,7 @@ const LeadTimeReport = () => import('@/modules/reports/leadtimereport/pages/Lead
 const SettingPurchaseOrderApproval = () => import('@/modules/settingpurchaseorderapproval/pages/SettingPurchaseOrderApproval.vue')
 const SettingDppFormula = () => import('@/modules/settingdppformula/pages/SettingDppFormula.vue')
 const ApiClient = () => import('@/modules/apiclient/pages/ApiClient.vue')
+const SettingMinWarehouseCash = () => import('@/modules/settingminwarehousecash/pages/SettingMinWarehouseCash.vue')
 const Forbidden = () => import('@/modules/error/pages/Forbidden.vue')
 
 const routes = [
@@ -141,7 +142,8 @@ const routes = [
                 children: [
                     { path: 'item_request', name: 'SettingApproverItemRequest', component: SettingApproverItemRequest, meta: { title: 'settingApproverItemRequest', requiresAuth: true, ability: { action: 'read', subject: 'setting_approver_item_request' } } },
                     { path: 'purchase_order_approval', name: 'SettingPurchaseOrderApproval', component: SettingPurchaseOrderApproval, meta: { title: 'settingPurchaseOrderApprover', requiresAuth: true, ability: { action: 'read', subject: 'setting_po_approval' } } },
-                    { path: 'dpp_formula', name: 'SettingDppFormula', component: SettingDppFormula, meta: { title: 'settingDppFormula', requiresAuth: true, ability: { action: 'read', subject: 'setting_dpp_formula' } } }
+                    { path: 'dpp_formula', name: 'SettingDppFormula', component: SettingDppFormula, meta: { title: 'settingDppFormula', requiresAuth: true, ability: { action: 'read', subject: 'setting_dpp_formula' } } },
+                    { path: 'min_warehouse_cash', name: 'SettingMinWarehouseCash', component: SettingMinWarehouseCash, meta: { title: 'settingMinWarehouseCash', requiresAuth: true, ability: { action: 'read', subject: 'setting_min_warehouse_cash' } } }
                 ]
             },
             {

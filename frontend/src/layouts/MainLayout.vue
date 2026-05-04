@@ -57,6 +57,7 @@ import IcRoundAdminPanelSettings from '~icons/ic/round-admin-panel-settings'
 import CarbonDeliverySettings from '~icons/carbon/delivery-settings'
 import HugeiconsDashboardSquareSetting from '~icons/hugeicons/dashboard-square-setting'
 import MaterialSymbolsFunction from '~icons/material-symbols/function'
+import MdiCashLock from '~icons/mdi/cash-lock'
 import MdiApi from '~icons/mdi/api'
 // Import Stores
 import { useMessageStore } from '@/stores/message'
@@ -174,7 +175,8 @@ const items = computed(() => [
         children: [
             { title: t('itemRequest'), props: { link: true, to: '/settings/item_request', rounded: 'xl', density: 'compact', prependIcon: HugeiconsDashboardSquareSetting, class: 'mb-1' }, show: can('read', 'setting_approver_item_request') },
             { title: t('purchaseOrder'), props: { link: true, to: '/settings/purchase_order_approval', rounded: 'xl', density: 'compact', prependIcon: CarbonDeliverySettings, class: 'mb-1' }, show: can('read', 'setting_po_approval') },
-            { title: t('settingDppFormula'), props: { link: true, to: '/settings/dpp_formula', rounded: 'xl', density: 'compact', prependIcon: MaterialSymbolsFunction, class: 'mb-1' }, show: can('read', 'setting_dpp_formula') }
+            { title: t('settingDppFormula'), props: { link: true, to: '/settings/dpp_formula', rounded: 'xl', density: 'compact', prependIcon: MaterialSymbolsFunction, class: 'mb-1' }, show: can('read', 'setting_dpp_formula') },
+            { title: t('settingMinWarehouseCash'), props: { link: true, to: '/settings/min_warehouse_cash', rounded: 'xl', density: 'compact', prependIcon: MdiCashLock, class: 'mb-1' }, show: can('read', 'setting_min_warehouse_cash') }
         ]
     },
     {

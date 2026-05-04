@@ -17,6 +17,7 @@ class UpdateRequest extends FormRequest
             'item_request_uid' => 'required|string|exists:wh_item_request,uid',
             'usage_date' => 'required|date',
             'project_name' => 'nullable|string|max:255',
+            'recipient_name' => 'nullable|string|max:150',
             'status' => 'required|string',
             'details' => 'required|array|min:1',
             'details.*.item_uid' => 'required|string|exists:wh_items,uid',

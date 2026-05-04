@@ -16,15 +16,39 @@ export interface ReportExportParams {
     end_date?: string | null
     status?: string | null
     search?: string | null
+    columns?: string[] | null
 }
 
 const cleanParams = <T extends Record<string, any>>(input: T): Partial<T> => {
     const out: Record<string, any> = {}
     Object.entries(input).forEach(([k, v]) => {
         if (v === null || v === undefined || v === '') return
+        if (Array.isArray(v) && v.length === 0) return
         out[k] = v
     })
     return out as Partial<T>
+}
+
+/**
+ * Serialize query string ala PHP: array di-render sebagai `key[]=v1&key[]=v2`
+ * sehingga Laravel selalu meng-cast jadi array (bahkan untuk 1 elemen).
+ * Default axios menulis `key=v1&key=v2` yang hanya kebetulan jadi array di
+ * PHP saat ada >=2 elemen.
+ */
+const serializePhpStyle = (params: Record<string, any>): string => {
+    const parts: string[] = []
+    Object.entries(params).forEach(([key, value]) => {
+        if (value === null || value === undefined) return
+        if (Array.isArray(value)) {
+            value.forEach((v) => {
+                if (v === null || v === undefined) return
+                parts.push(`${encodeURIComponent(key)}[]=${encodeURIComponent(String(v))}`)
+            })
+        } else {
+            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+        }
+    })
+    return parts.join('&')
 }
 
 /**
@@ -75,6 +99,12 @@ export const createReportStore = <TRow = any>(id: string, basePath: string) => {
                     const response = await api.get(`${basePath}/export`, {
                         params: cleanParams(payload),
                         responseType: 'blob',
+                        // Custom serializer: PHP-style bracket notation untuk array
+                        // (`columns[]=a&columns[]=b`) supaya Laravel selalu meng-cast
+                        // jadi array, bahkan untuk 1 elemen.
+                        paramsSerializer: {
+                            serialize: (params) => serializePhpStyle(params),
+                        },
                     })
 
                     const disposition: string = response.headers?.['content-disposition'] ?? ''

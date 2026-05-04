@@ -4,6 +4,7 @@ import type { DataTableHeader } from 'vuetify'
 import BaseSearchInput from '@/components/base/BaseSearchInput.vue'
 import BaseRefreshButton from '@/components/base/BaseRefreshButton.vue'
 import ExportDialog, { type ExportPayload } from '@/modules/reports/_shared/components/ExportDialog.vue'
+import { leadTimeColumns } from '@/modules/reports/_shared/reportColumns'
 import { useLeadTimeReportStore } from '@/stores/lead_time_report'
 import { useTranslate } from '@/composables/useTranslate'
 import { useAbility } from '@/composables/useAbility'
@@ -88,6 +89,7 @@ const handleExportSubmit = async (payload: ExportPayload) => {
     <export-dialog
         v-if="exportDialog" v-model="exportDialog"
         :loading="store.exporting"
+        :columns="leadTimeColumns"
         @submit="handleExportSubmit" @close="exportDialog = false"
     />
 </template>

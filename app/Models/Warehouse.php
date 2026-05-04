@@ -17,6 +17,12 @@ class Warehouse extends Model
         'address',
         'additional_info',
         'cash_balance',
+        'min_cash',
+    ];
+
+    protected $casts = [
+        'cash_balance' => 'decimal:2',
+        'min_cash'     => 'decimal:2',
     ];
 
     protected static function boot()

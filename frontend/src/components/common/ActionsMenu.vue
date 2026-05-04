@@ -10,6 +10,9 @@ import SolarListCheckBold from '~icons/solar/list-check-bold'
 import FluentNotepad24Filled from '~icons/fluent/notepad-24-filled'
 import MdiWarehouse from '~icons/mdi/warehouse'
 import MdiKeyVariant from '~icons/mdi/key-variant'
+import MdiPrinterOutline from '~icons/mdi/printer-outline'
+// Action `revised` (dipakai ItemUsage) — pakai MDI yang dijamin ada.
+import MdiNotebookEditOutline from '~icons/mdi/notebook-edit-outline'
 // Import Composables
 import { useTranslate } from '@/composables/useTranslate'
 
@@ -44,6 +47,8 @@ const ACTION_ICON: Record<string, IconLike> = {
     approve:          SolarListCheckBold,
     reject:           FluentTextChangeReject20Regular,
     revision:         FluentNotepad24Filled,
+    revised:          MdiNotebookEditOutline,
+    print:            MdiPrinterOutline,
     manage_rack_tank: MdiWarehouse,
     manage_token:     MdiKeyVariant,
 }

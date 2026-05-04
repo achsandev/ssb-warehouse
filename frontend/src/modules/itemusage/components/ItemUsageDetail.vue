@@ -89,6 +89,15 @@ const handleClose = () => emit('close')
                 <v-col cols="6" sm="4" class="text-caption text-medium-emphasis">{{ t('projectName') }}</v-col>
                 <v-col cols="6" sm="8" class="text-body-2">{{ item.project_name || '-' }}</v-col>
 
+                <v-col cols="6" sm="4" class="text-caption text-medium-emphasis">{{ t('recipientName') }}</v-col>
+                <v-col cols="6" sm="8" class="text-body-2">
+                    <span v-if="item.recipient_name" class="d-inline-flex align-center">
+                        <v-icon icon="mdi-account-arrow-right-outline" size="14" class="me-1 text-medium-emphasis" />
+                        {{ item.recipient_name }}
+                    </span>
+                    <span v-else>-</span>
+                </v-col>
+
                 <v-col cols="6" sm="4" class="text-caption text-medium-emphasis">{{ t('createdAt') }}</v-col>
                 <v-col cols="6" sm="8" class="text-body-2">{{ formatDate(item.created_at as string) }}</v-col>
 

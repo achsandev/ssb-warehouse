@@ -320,6 +320,17 @@ Route::prefix('nosu')->group(function () {
         Route::put('/setting_dpp_formula/{uid}', [\App\Http\Controllers\SettingDppFormulaController::class, 'update'])->middleware('custom_permission:setting_dpp_formula.update');
         Route::delete('/setting_dpp_formula/{uid}', [\App\Http\Controllers\SettingDppFormulaController::class, 'destroy'])->middleware('custom_permission:setting_dpp_formula.delete');
 
+        // ── Setting Min Warehouse Cash ───────────────────────────────────
+        // Endpoint terbatas: hanya read + update min_cash per warehouse.
+        // Tidak ada create/delete karena resource yang dikelola adalah
+        // kolom existing di wh_warehouse, bukan entity baru.
+        Route::get('/setting_min_warehouse_cash', [\App\Http\Controllers\SettingMinWarehouseCashController::class, 'index'])
+            ->middleware('custom_permission:setting_min_warehouse_cash.read');
+        Route::get('/setting_min_warehouse_cash/{uid}', [\App\Http\Controllers\SettingMinWarehouseCashController::class, 'show'])
+            ->middleware('custom_permission:setting_min_warehouse_cash.read');
+        Route::put('/setting_min_warehouse_cash/{uid}', [\App\Http\Controllers\SettingMinWarehouseCashController::class, 'update'])
+            ->middleware('custom_permission:setting_min_warehouse_cash.update');
+
         // Setting PO Approval (tiered)
         Route::get('/setting_po_approval', [\App\Http\Controllers\SettingPoApprovalController::class, 'index'])->middleware('custom_permission:setting_po_approval.read');
         Route::get('/setting_po_approval/{uid}', [\App\Http\Controllers\SettingPoApprovalController::class, 'show'])->middleware('custom_permission:setting_po_approval.read');
