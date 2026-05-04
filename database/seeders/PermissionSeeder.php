@@ -143,6 +143,10 @@ class PermissionSeeder extends Seeder
             'setting_dpp_formula.update',
             'setting_dpp_formula.delete',
 
+            // Setting Min Warehouse Cash
+            'setting_min_warehouse_cash.read',
+            'setting_min_warehouse_cash.update',
+
             // Stock Opname
             'stock_opname.read',
             'stock_opname.create',

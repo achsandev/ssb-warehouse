@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Services\Reports\XlsxReportWriter;
@@ -19,14 +20,33 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class LeadTimeReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'lead-time-report';
 
-    private const HEADERS = [
-        'No', 'Nama Barang', 'Kode Barang', 'Tanggal PO', 'Tanggal Diterima',
-        'Lead Time (hari)', 'Keterangan',
+    /** Whitelist kolom export. Key 'no' adalah counter row. */
+    private const COLUMN_DEFS = [
+        'no'                 => 'No',
+        'item_name'          => 'Nama Barang',
+        'item_code'          => 'Kode Barang',
+        'po_date'            => 'Tanggal PO',
+        'first_receipt_date' => 'Tanggal Diterima',
+        'lead_days'          => 'Lead Time (hari)',
+        'description'        => 'Keterangan',
     ];
+
+    private const COLUMN_WIDTHS = [
+        'no'                 => 6,
+        'item_name'          => 32,
+        'item_code'          => 16,
+        'po_date'            => 16,
+        'first_receipt_date' => 18,
+        'lead_days'          => 16,
+        'description'        => 28,
+    ];
+
+    /** Kolom yang harus center-align (style 6). */
+    private const CENTER_ALIGNED = ['no', 'lead_days'];
 
     public function index(FilterRequest $request): JsonResponse
     {
@@ -57,7 +77,7 @@ class LeadTimeReportController extends Controller
 
     /**
      * Export XLSX native (merge cell + center align).
-     * Title 1, 2, 3 di-merge B:H, title 2 = "Rincian Lead Time".
+     * Mendukung pemilihan kolom dinamis via `columns[]` di request.
      */
     public function export(FilterRequest $request): StreamedResponse
     {
@@ -65,36 +85,29 @@ class LeadTimeReportController extends Controller
         $fmt = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
         $periode = 'Dari ' . $fmt($min) . ' s/d ' . $fmt($max);
 
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+        $endColLetter = $this->columnLetter(1 + count($columnKeys));
+
         $writer = new XlsxReportWriter('Rincian Lead Time');
 
         $writer
-            ->addMergedTitle(row: 2, startCol: 'B', endCol: 'H', text: 'PT. SUMBER SETIA BUDI', style: 1)
-            ->addMergedTitle(row: 3, startCol: 'B', endCol: 'H', text: 'Rincian Lead Time', style: 2)
-            ->addMergedTitle(row: 4, startCol: 'B', endCol: 'H', text: $periode, style: 3);
+            ->addMergedTitle(row: 2, startCol: 'B', endCol: $endColLetter, text: 'PT. SUMBER SETIA BUDI', style: 1)
+            ->addMergedTitle(row: 3, startCol: 'B', endCol: $endColLetter, text: 'Rincian Lead Time', style: 2)
+            ->addMergedTitle(row: 4, startCol: 'B', endCol: $endColLetter, text: $periode, style: 3);
 
-        // Header tabel mulai dari B6 (row 5 sebagai spacer kosong).
         $headerRow = 6;
-        $writer->setHeader($headerRow, 2, self::HEADERS);
+        $writer->setHeader($headerRow, 2, $headers);
 
-        // Lebar kolom (idx 2..8 = B..H).
-        $widths = [
-            2 => 6,  // No
-            3 => 32, // Nama Barang
-            4 => 16, // Kode Barang
-            5 => 16, // Tanggal PO
-            6 => 18, // Tanggal Diterima
-            7 => 16, // Lead Time (hari)
-            8 => 28, // Keterangan
-        ];
-        foreach ($widths as $idx => $w) {
-            $writer->setColumnWidth($idx, $w);
+        foreach ($columnKeys as $i => $key) {
+            $colIdx = 2 + $i;
+            $writer->setColumnWidth($colIdx, self::COLUMN_WIDTHS[$key] ?? 18);
+
+            if (in_array($key, self::CENTER_ALIGNED, true)) {
+                $writer->setColumnStyle($colIdx, 6);
+            }
         }
 
-        // Kolom No (B=2) & Lead Time (G=7) — align tengah.
-        $writer->setColumnStyle(2, 6);
-        $writer->setColumnStyle(7, 6);
-
-        // Data rows.
         $rowIdx = $headerRow + 1;
         $no = 1;
         $fmtId = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
@@ -105,16 +118,20 @@ class LeadTimeReportController extends Controller
                 ->get() as $r
         ) {
             $d = $this->transform($r);
+            $rowNo = $no++;
 
-            $writer->addRow($rowIdx++, 2, [
-                $no++,
-                $d['item_name'],
-                $d['item_code'],
-                $fmtId($d['po_date']),
-                $fmtId($d['first_receipt_date']),
-                $d['lead_days'] ?? '-',
-                '', // Keterangan — sengaja dikosongkan
-            ]);
+            $values = $this->pickRow($d, $columnKeys, function ($row, $k) use ($rowNo, $fmtId) {
+                return match ($k) {
+                    'no'                 => $rowNo,
+                    'po_date'            => $fmtId($row['po_date'] ?? null),
+                    'first_receipt_date' => $fmtId($row['first_receipt_date'] ?? null),
+                    'lead_days'          => $row['lead_days'] ?? '-',
+                    'description'        => '',
+                    default              => $row[$k] ?? '',
+                };
+            });
+
+            $writer->addRow($rowIdx++, 2, $values);
         }
 
         $filename = sprintf(

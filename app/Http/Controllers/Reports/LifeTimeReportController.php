@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Traits\ApiResponse;
@@ -19,9 +20,19 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class LifeTimeReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'life-time-report';
+
+    /** Whitelist kolom export — key sesuai output `transform()`. */
+    private const COLUMN_DEFS = [
+        'item_code'          => 'Item Code',
+        'item_name'          => 'Item Name',
+        'unit'               => 'Unit',
+        'first_receipt_date' => 'First Receipt Date',
+        'last_receipt_date'  => 'Last Receipt Date',
+        'days_in_stock'      => 'Days In Stock',
+    ];
 
     public function index(FilterRequest $request): JsonResponse
     {
@@ -52,15 +63,15 @@ class LifeTimeReportController extends Controller
 
     public function export(FilterRequest $request): StreamedResponse
     {
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+
         return $this->streamReportCsvFromCursor(
             query: $this->buildQuery($request)->orderByDesc('days_in_stock'),
-            csvHeaders: ['Item Code', 'Item Name', 'Unit', 'First Receipt Date', 'Last Receipt Date', 'Days In Stock'],
-            rowMapper: function ($row) {
+            csvHeaders: $headers,
+            rowMapper: function ($row) use ($columnKeys) {
                 $d = $this->transform($row);
-                return [
-                    $d['item_code'], $d['item_name'], $d['unit'],
-                    $d['first_receipt_date'], $d['last_receipt_date'], $d['days_in_stock'],
-                ];
+                return $this->pickRow($d, $columnKeys, fn ($r, $k) => $r[$k] ?? '');
             },
             slug: self::SLUG,
             request: $request,

@@ -10,6 +10,14 @@ import { get as getStockLookup } from '@/api/lookup/stock.api'
 import BaseAutocomplete from '@/components/base/BaseAutocomplete.vue'
 import BaseDateInput from '@/components/base/BaseDateInput.vue'
 import dayjs from 'dayjs'
+// Icons (unplugin-icons — Vue component, bukan font string)
+import MdiClipboardCheckOutline from '~icons/mdi/clipboard-check-outline'
+import MdiClose from '~icons/mdi/close'
+import MdiInformationOutline from '~icons/mdi/information-outline'
+import MdiAccountArrowRightOutline from '~icons/mdi/account-arrow-right-outline'
+import MdiFormatListBulleted from '~icons/mdi/format-list-bulleted'
+import MdiClipboardTextOutline from '~icons/mdi/clipboard-text-outline'
+import MdiContentSaveOutline from '~icons/mdi/content-save-outline'
 
 const props = defineProps<{
     modelValue: boolean
@@ -71,7 +79,8 @@ setValues({
     usage_date: props.data.usage_date
         ? dayjs(props.data.usage_date as string).format('YYYY-MM-DD')
         : dayjs().format('YYYY-MM-DD'),
-    project_name: props.data.project_name ?? null,
+    project_name:   props.data.project_name ?? null,
+    recipient_name: props.data.recipient_name ?? null,
     details: buildInitialDetails(),
 })
 
@@ -79,6 +88,7 @@ setValues({
 const { value: item_request_uid } = useField<string | null>('item_request_uid')
 const { value: usage_date }       = useField<string>('usage_date')
 const { value: project_name }     = useField<string | null>('project_name')
+const { value: recipient_name }   = useField<string | null>('recipient_name')
 
 const { fields: detailRows, replace: replaceRows } = useFieldArray<{
     item_uid: string | null
@@ -98,6 +108,8 @@ const onItemRequestSelected = async (uid: string | null) => {
         replaceRows([])
         detailDisplay.value = []
         project_name.value = null
+        // recipient_name TIDAK di-reset di sini — value-nya independen dari
+        // item request, di-isi manual oleh user (PIC penerima fisik di lapangan).
         return
     }
 
@@ -221,11 +233,11 @@ const onClose = () => {
 
             <!-- ── Title bar ───────────────────────────────────────────── -->
             <v-card-title class="d-flex align-center gap-2 px-6 py-4">
-                <v-icon icon="mdi-clipboard-check-outline" color="primary" class="me-1" />
+                <v-icon :icon="MdiClipboardCheckOutline" color="primary" class="me-1" />
                 <span class="text-h6 font-weight-semibold">{{ title }}</span>
                 <v-spacer />
                 <v-btn
-                    icon="mdi-close"
+                    :icon="MdiClose"
                     variant="text"
                     size="small"
                     :disabled="isBusy"
@@ -240,7 +252,7 @@ const onClose = () => {
 
                     <!-- ── Section: General Info ──────────────────────── -->
                     <div class="section-header mb-3">
-                        <v-icon icon="mdi-information-outline" size="18" color="primary" />
+                        <v-icon :icon="MdiInformationOutline" size="18" color="primary" />
                         <span class="text-subtitle-2 font-weight-bold text-primary">{{ t('generalInfo') }}</span>
                     </div>
 
@@ -265,13 +277,29 @@ const onClose = () => {
                             />
                         </v-col>
 
+                        <v-col cols="12" md="6">
+                            <v-text-field
+                                v-model="recipient_name"
+                                :label="t('recipientName')"
+                                :placeholder="t('recipientNamePlaceholder')"
+                                :error-messages="(errors as any).recipient_name"
+                                :disabled="loadingForm"
+                                variant="outlined"
+                                density="comfortable"
+                                hide-details="auto"
+                                maxlength="150"
+                                autocomplete="off"
+                                :prepend-inner-icon="MdiAccountArrowRightOutline"
+                            />
+                        </v-col>
+
                     </v-row>
 
                     <!-- ── Section: Item Details ──────────────────────── -->
                     <v-divider class="mt-1 mb-4" />
 
                     <div class="section-header mb-3">
-                        <v-icon icon="mdi-format-list-bulleted" size="18" color="primary" />
+                        <v-icon :icon="MdiFormatListBulleted" size="18" color="primary" />
                         <span class="text-subtitle-2 font-weight-bold text-primary">{{ t('details') }}</span>
                         <v-chip
                             v-if="detailRows.length"
@@ -302,7 +330,7 @@ const onClose = () => {
                                 <tr v-if="detailRows.length === 0">
                                     <td colspan="6" class="pa-8 text-center">
                                         <div class="d-flex flex-column align-center gap-2 text-medium-emphasis">
-                                            <v-icon icon="mdi-clipboard-text-outline" size="48" />
+                                            <v-icon :icon="MdiClipboardTextOutline" size="48" />
                                             <span class="text-body-2">{{ t('selectItemRequestFirst') }}</span>
                                         </div>
                                     </td>
@@ -399,7 +427,7 @@ const onClose = () => {
                     variant="elevated"
                     :loading="saving"
                     :disabled="loadingForm || loadingItemRequest"
-                    prepend-icon="mdi-content-save-outline"
+                    :prepend-icon="MdiContentSaveOutline"
                     @click="onSubmit"
                 >
                     {{ t('save') }}

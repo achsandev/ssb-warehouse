@@ -4,6 +4,7 @@ import type { DataTableHeader } from 'vuetify'
 import BaseSearchInput from '@/components/base/BaseSearchInput.vue'
 import BaseRefreshButton from '@/components/base/BaseRefreshButton.vue'
 import ExportDialog, { type ExportPayload, type ExportStatusOption } from '@/modules/reports/_shared/components/ExportDialog.vue'
+import { stockAdjustmentColumns } from '@/modules/reports/_shared/reportColumns'
 import { useStockAdjustmentReportStore } from '@/stores/stock_adjustment_report'
 import { useTranslate } from '@/composables/useTranslate'
 import { useAbility } from '@/composables/useAbility'
@@ -109,6 +110,7 @@ const handleExportSubmit = async (payload: ExportPayload) => {
         v-model="exportDialog"
         :loading="store.exporting"
         :status-options="statusOptions"
+        :columns="stockAdjustmentColumns"
         @submit="handleExportSubmit"
         @close="exportDialog = false"
     />

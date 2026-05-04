@@ -11,6 +11,7 @@ import ConfirmRejectDialog from '@/components/common/ConfirmRejectDialog.vue'
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog.vue'
 import ItemUsageForm from '../components/ItemUsageForm.vue'
 import ItemUsageDetail from '../components/ItemUsageDetail.vue'
+import ItemUsagePrint from '../components/ItemUsagePrint.vue'
 // Import Stores
 import { useItemUsageStore } from '@/stores/item_usage'
 import { useAuthStore } from '@/stores/auth'
@@ -37,6 +38,7 @@ const { can } = useAbility()
 // =========================
 const formDialog = ref(false)
 const detailDialog = ref(false)
+const printDialog = ref(false)
 const confirmDialogDelete = ref(false)
 const confirmDialogApprove = ref(false)
 const confirmDialogReject = ref(false)
@@ -48,6 +50,7 @@ const formField = reactive<ItemUsageList>({
     usage_date: new Date(),
     item_request: null,
     project_name: null,
+    recipient_name: null,
     status: '',
     details: [],
     created_at: '',
@@ -87,6 +90,7 @@ const headers = computed<DataTableHeader[]>(() => [
     { title: t('usageDate'), key: 'usage_date', align: 'start', nowrap: true },
     { title: t('itemRequest'), key: 'item_request', align: 'start', nowrap: true },
     { title: t('projectName'), key: 'project_name', align: 'start', nowrap: true },
+    { title: t('recipientName'), key: 'recipient_name', align: 'start', nowrap: true },
     { title: t('status'), key: 'status', align: 'start', nowrap: true },
 ])
 
@@ -155,6 +159,12 @@ const actionMenus = (item: ItemUsageList): string[] => {
         menus.push('delete')
     }
 
+    // Print: hanya ketika status approved — usage dianggap valid untuk
+    // dijadikan dokumen fisik (Permintaan Pakai Barang yang sah).
+    if (status === 'approved') {
+        menus.push('print')
+    }
+
     return menus
 }
 
@@ -168,6 +178,7 @@ const resetForm = () => {
         usage_date: new Date(),
         item_request: null,
         project_name: null,
+        recipient_name: null,
         status: '',
         details: [],
         created_at: '',
@@ -181,6 +192,7 @@ const handleClose = () => {
     resetForm()
     formDialog.value = false
     detailDialog.value = false
+    printDialog.value = false
     confirmDialogDelete.value = false
     confirmDialogApprove.value = false
     confirmDialogReject.value = false
@@ -199,8 +211,14 @@ const handleActionMenu = (action: string, data: ItemUsageList) => {
         approve: () => handleOpenApprove(data),
         reject:  () => handleOpenReject(data),
         delete:  () => handleOpenDelete(data.uid),
+        print:   () => handleOpenPrint(data),
     }
     actionMap[action]?.()
+}
+
+const handleOpenPrint = (item: ItemUsageList) => {
+    Object.assign(formField, item)
+    printDialog.value = true
 }
 
 const handleOpenForm = (item: ItemUsageList | null, action: 'create' | 'update' | 'revised' = 'create') => {
@@ -251,14 +269,15 @@ const handleSubmit = async (value: ItemUsageForm) => {
 
 const buildPayload = (status: string): ItemUsageForm => ({
     item_request_uid: formField.item_request?.uid ?? '',
-    usage_date: formField.usage_date,
-    project_name: formField.project_name,
+    usage_date:       formField.usage_date,
+    project_name:     formField.project_name,
+    recipient_name:   formField.recipient_name,
     status,
     details: (formField.details ?? []).map((d) => ({
-        item_uid: d.item?.uid ?? null,
-        unit_uid: d.unit?.uid ?? null,
-        qty: d.qty,
-        usage_qty: d.usage_qty,
+        item_uid:    d.item?.uid ?? null,
+        unit_uid:    d.unit?.uid ?? null,
+        qty:         d.qty,
+        usage_qty:   d.usage_qty,
         description: d.description,
     })),
 })
@@ -335,6 +354,14 @@ const handleDelete = async () => {
                     {{ item.project_name ?? '-' }}
                 </template>
 
+                <template #item.recipient_name="{ item }">
+                    <span v-if="item.recipient_name" class="d-inline-flex align-center">
+                        <v-icon icon="mdi-account-arrow-right-outline" size="14" class="me-1 text-medium-emphasis" />
+                        {{ item.recipient_name }}
+                    </span>
+                    <span v-else class="text-medium-emphasis">-</span>
+                </template>
+
                 <template #item.usage_date="{ item }">
                     {{ formatDate(item.usage_date as string) }}
                 </template>
@@ -368,6 +395,14 @@ const handleDelete = async () => {
     <item-usage-detail
         v-if="detailDialog"
         v-model="detailDialog"
+        :item="formField"
+        @close="handleClose"
+    />
+
+    <!-- Print Out (only mounted on demand to avoid hidden DOM cost) -->
+    <item-usage-print
+        v-if="printDialog"
+        v-model="printDialog"
         :item="formField"
         @close="handleClose"
     />

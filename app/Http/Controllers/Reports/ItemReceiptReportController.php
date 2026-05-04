@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Models\ReceiveItemDetail;
@@ -15,16 +16,39 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ItemReceiptReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'item-receipt-report';
 
     private const DATE_COLUMN = 'wh_receipt_item.receipt_date';
 
-    private const HEADERS = [
-        'Kode #', 'Nama Barang', 'Kuantitas', 'Satuan', 'Nomor #',
-        'Tanggal', 'Pemasok', 'Kuantitas Dipesan', 'Total Harga',
+    /** Whitelist kolom export — key sesuai output `transform()`. */
+    private const COLUMN_DEFS = [
+        'item_code'      => 'Kode #',
+        'item_name'      => 'Nama Barang',
+        'qty_received'   => 'Kuantitas',
+        'unit'           => 'Satuan',
+        'receipt_number' => 'Nomor #',
+        'receipt_date'   => 'Tanggal',
+        'supplier_name'  => 'Pemasok',
+        'qty'            => 'Kuantitas Dipesan',
+        'total'          => 'Total Harga',
     ];
+
+    private const COLUMN_WIDTHS = [
+        'item_code'      => 16,
+        'item_name'      => 32,
+        'qty_received'   => 12,
+        'unit'           => 10,
+        'receipt_number' => 22,
+        'receipt_date'   => 16,
+        'supplier_name'  => 24,
+        'qty'            => 18,
+        'total'          => 20,
+    ];
+
+    /** Kolom yang harus right-align (currency). */
+    private const RIGHT_ALIGNED = ['total'];
 
     public function index(FilterRequest $request): JsonResponse
     {
@@ -52,7 +76,7 @@ class ItemReceiptReportController extends Controller
 
     /**
      * Export XLSX native (merge cell + center align).
-     * Title 1, 2, 3 di-merge B:J, title 2 = "Rincian Penerimaan Barang".
+     * Mendukung pemilihan kolom dinamis via `columns[]` di request.
      */
     public function export(FilterRequest $request): StreamedResponse
     {
@@ -60,52 +84,33 @@ class ItemReceiptReportController extends Controller
         $fmt = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
         $periode = 'Dari ' . $fmt($min) . ' s/d ' . $fmt($max);
 
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+        $endColLetter = $this->columnLetter(1 + count($columnKeys));
+
         $writer = new XlsxReportWriter('Rincian Penerimaan Barang');
 
         $writer
-            ->addMergedTitle(row: 2, startCol: 'B', endCol: 'J', text: 'PT. SUMBER SETIA BUDI', style: 1)
-            ->addMergedTitle(row: 3, startCol: 'B', endCol: 'J', text: 'Rincian Penerimaan Barang', style: 2)
-            ->addMergedTitle(row: 4, startCol: 'B', endCol: 'J', text: $periode, style: 3);
+            ->addMergedTitle(row: 2, startCol: 'B', endCol: $endColLetter, text: 'PT. SUMBER SETIA BUDI', style: 1)
+            ->addMergedTitle(row: 3, startCol: 'B', endCol: $endColLetter, text: 'Rincian Penerimaan Barang', style: 2)
+            ->addMergedTitle(row: 4, startCol: 'B', endCol: $endColLetter, text: $periode, style: 3);
 
-        // Header tabel mulai dari B6 (row 5 sebagai spacer kosong).
         $headerRow = 6;
-        $writer->setHeader($headerRow, 2, self::HEADERS);
+        $writer->setHeader($headerRow, 2, $headers);
 
-        // Lebar kolom (idx 2..10 = B..J).
-        $widths = [
-            2  => 16, // Kode #
-            3  => 32, // Nama Barang
-            4  => 12, // Kuantitas
-            5  => 10, // Satuan
-            6  => 22, // Nomor #
-            7  => 16, // Tanggal
-            8  => 24, // Pemasok
-            9  => 18, // Kuantitas Dipesan
-            10 => 20, // Total Harga
-        ];
-        foreach ($widths as $idx => $w) {
-            $writer->setColumnWidth($idx, $w);
+        foreach ($columnKeys as $i => $key) {
+            $colIdx = 2 + $i;
+            $writer->setColumnWidth($colIdx, self::COLUMN_WIDTHS[$key] ?? 18);
+
+            if (in_array($key, self::RIGHT_ALIGNED, true)) {
+                $writer->setColumnStyle($colIdx, 5);
+            }
         }
 
-        // Total Harga (col J = 10) — align kanan.
-        $writer->setColumnStyle(10, 5);
-
-        // Data rows.
         $rowIdx = $headerRow + 1;
         foreach ($this->buildQuery($request)->orderBy('wh_receipt_item_detail.id')->cursor() as $r) {
             $d = $this->transform($r);
-
-            $writer->addRow($rowIdx++, 2, [
-                $d['item_code'],
-                $d['item_name'],
-                $d['qty_received'],
-                $d['unit'],
-                $d['receipt_number'],
-                $d['receipt_date'],
-                $d['supplier_name'],
-                $d['qty'],
-                $d['total'],
-            ]);
+            $writer->addRow($rowIdx++, 2, $this->pickRow($d, $columnKeys, fn ($row, $k) => $row[$k] ?? ''));
         }
 
         $filename = sprintf(

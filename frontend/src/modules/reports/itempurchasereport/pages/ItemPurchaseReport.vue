@@ -4,6 +4,7 @@ import type { DataTableHeader } from 'vuetify'
 import BaseSearchInput from '@/components/base/BaseSearchInput.vue'
 import BaseRefreshButton from '@/components/base/BaseRefreshButton.vue'
 import ExportDialog, { type ExportPayload, type ExportStatusOption } from '@/modules/reports/_shared/components/ExportDialog.vue'
+import { itemPurchaseColumns } from '@/modules/reports/_shared/reportColumns'
 import { useItemPurchaseReportStore } from '@/stores/item_purchase_report'
 import { useTranslate } from '@/composables/useTranslate'
 import { useAbility } from '@/composables/useAbility'
@@ -104,6 +105,7 @@ const money = (n: number) => Number(n).toLocaleString('id-ID', { maximumFraction
     <export-dialog
         v-if="exportDialog" v-model="exportDialog"
         :loading="store.exporting" :status-options="statusOptions"
+        :columns="itemPurchaseColumns"
         @submit="handleExportSubmit" @close="exportDialog = false"
     />
 </template>

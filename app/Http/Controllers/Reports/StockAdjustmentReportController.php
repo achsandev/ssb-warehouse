@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Models\StockAdjustmentDetail;
@@ -15,15 +16,31 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StockAdjustmentReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'stock-adjustment-report';
 
     private const DATE_COLUMN = 'wh_stock_adjustment.adjustment_date';
 
-    private const HEADERS = [
-        'Tanggal', 'Kode Barang', 'Nama Barang', 'Kuantitas', 'Nomor #',
-        'Nama Departemen', 'Nama Proyek',
+    /** Whitelist kolom export — key sesuai output `transform()`. */
+    private const COLUMN_DEFS = [
+        'adjustment_date'   => 'Tanggal',
+        'item_code'         => 'Kode Barang',
+        'item_name'         => 'Nama Barang',
+        'adjustment_qty'    => 'Kuantitas',
+        'adjustment_number' => 'Nomor #',
+        'department_name'   => 'Nama Departemen',
+        'project_name'      => 'Nama Proyek',
+    ];
+
+    private const COLUMN_WIDTHS = [
+        'adjustment_date'   => 16,
+        'item_code'         => 16,
+        'item_name'         => 32,
+        'adjustment_qty'    => 12,
+        'adjustment_number' => 20,
+        'department_name'   => 22,
+        'project_name'      => 24,
     ];
 
     public function index(FilterRequest $request): JsonResponse
@@ -60,38 +77,28 @@ class StockAdjustmentReportController extends Controller
         $fmt = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
         $periode = 'Dari ' . $fmt($min) . ' s/d ' . $fmt($max);
 
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+        $endColLetter = $this->columnLetter(1 + count($columnKeys));
+
         $writer = new XlsxReportWriter('Penyesuaian Stok Barang');
 
-        // Judul — merge B..H, center+middle.
         $writer
-            ->addMergedTitle(row: 2, startCol: 'B', endCol: 'H', text: 'PT. SUMBER SETIA BUDI', style: 1)
-            ->addMergedTitle(row: 3, startCol: 'B', endCol: 'H', text: 'Penyesuaian Stok Barang', style: 2)
-            ->addMergedTitle(row: 4, startCol: 'B', endCol: 'H', text: $periode, style: 3);
+            ->addMergedTitle(row: 2, startCol: 'B', endCol: $endColLetter, text: 'PT. SUMBER SETIA BUDI', style: 1)
+            ->addMergedTitle(row: 3, startCol: 'B', endCol: $endColLetter, text: 'Penyesuaian Stok Barang', style: 2)
+            ->addMergedTitle(row: 4, startCol: 'B', endCol: $endColLetter, text: $periode, style: 3);
 
-        // Header tabel mulai dari B6 (row 5 sebagai spacer kosong).
         $headerRow = 6;
-        $writer->setHeader($headerRow, 2, self::HEADERS);
+        $writer->setHeader($headerRow, 2, $headers);
 
-        // Lebar kolom agar rapi (index 2..8 = B..H).
-        $widths = [2 => 16, 3 => 16, 4 => 32, 5 => 12, 6 => 20, 7 => 22, 8 => 24];
-        foreach ($widths as $idx => $w) {
-            $writer->setColumnWidth($idx, $w);
+        foreach ($columnKeys as $i => $key) {
+            $writer->setColumnWidth(2 + $i, self::COLUMN_WIDTHS[$key] ?? 18);
         }
 
-        // Data rows.
         $rowIdx = $headerRow + 1;
         foreach ($this->buildQuery($request)->orderBy('wh_stock_adjustment_detail.id')->cursor() as $r) {
             $d = $this->transform($r);
-
-            $writer->addRow($rowIdx++, 2, [
-                $d['adjustment_date'],
-                $d['item_code'],
-                $d['item_name'],
-                $d['adjustment_qty'],
-                $d['adjustment_number'],
-                $d['department_name'],
-                $d['project_name'],
-            ]);
+            $writer->addRow($rowIdx++, 2, $this->pickRow($d, $columnKeys, fn ($row, $k) => $row[$k] ?? ''));
         }
 
         $filename = sprintf(

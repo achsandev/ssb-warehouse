@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Models\PurchaseOrderDetail;
@@ -15,16 +16,41 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ItemPurchaseReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'item-purchase-report';
 
     private const DATE_COLUMN = 'wh_purchase_order.po_date';
 
-    private const HEADERS = [
-        'Tanggal', 'Nomor #', 'Pemasok', 'Kode #', 'Nama Barang',
-        'Kuantitas', 'Harga', 'Total Harga', 'Nama Proyek', 'Nama Departemen',
+    /** Whitelist kolom export — key sesuai output `transform()`. */
+    private const COLUMN_DEFS = [
+        'po_date'         => 'Tanggal',
+        'po_number'       => 'Nomor #',
+        'supplier_name'   => 'Pemasok',
+        'item_code'       => 'Kode #',
+        'item_name'       => 'Nama Barang',
+        'qty'             => 'Kuantitas',
+        'price'           => 'Harga',
+        'total'           => 'Total Harga',
+        'project_name'    => 'Nama Proyek',
+        'department_name' => 'Nama Departemen',
     ];
+
+    private const COLUMN_WIDTHS = [
+        'po_date'         => 16,
+        'po_number'       => 20,
+        'supplier_name'   => 24,
+        'item_code'       => 16,
+        'item_name'       => 32,
+        'qty'             => 12,
+        'price'           => 16,
+        'total'           => 18,
+        'project_name'    => 22,
+        'department_name' => 22,
+    ];
+
+    /** Kolom yang harus right-align (currency). */
+    private const RIGHT_ALIGNED = ['price', 'total'];
 
     public function index(FilterRequest $request): JsonResponse
     {
@@ -52,7 +78,7 @@ class ItemPurchaseReportController extends Controller
 
     /**
      * Export XLSX native (merge cell + center align).
-     * Title 1, 2, 3 di-merge B:K, dengan title 2 = "Rincian Pesanan Pembelian".
+     * Mendukung pemilihan kolom dinamis via `columns[]` di request.
      */
     public function export(FilterRequest $request): StreamedResponse
     {
@@ -60,56 +86,34 @@ class ItemPurchaseReportController extends Controller
         $fmt = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
         $periode = 'Dari ' . $fmt($min) . ' s/d ' . $fmt($max);
 
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+        $endColLetter = $this->columnLetter(1 + count($columnKeys));
+
         $writer = new XlsxReportWriter('Rincian Pesanan Pembelian');
 
-        // Judul — merge B..T, center+middle.
         $writer
-            ->addMergedTitle(row: 2, startCol: 'B', endCol: 'K', text: 'PT. SUMBER SETIA BUDI', style: 1)
-            ->addMergedTitle(row: 3, startCol: 'B', endCol: 'K', text: 'Rincian Pesanan Pembelian', style: 2)
-            ->addMergedTitle(row: 4, startCol: 'B', endCol: 'K', text: $periode, style: 3);
+            ->addMergedTitle(row: 2, startCol: 'B', endCol: $endColLetter, text: 'PT. SUMBER SETIA BUDI', style: 1)
+            ->addMergedTitle(row: 3, startCol: 'B', endCol: $endColLetter, text: 'Rincian Pesanan Pembelian', style: 2)
+            ->addMergedTitle(row: 4, startCol: 'B', endCol: $endColLetter, text: $periode, style: 3);
 
-        // Header tabel mulai dari B6 (row 5 sebagai spacer kosong).
         $headerRow = 6;
-        $writer->setHeader($headerRow, 2, self::HEADERS);
+        $writer->setHeader($headerRow, 2, $headers);
 
-        // Lebar kolom (index 2..11 = B..K) agar rapi.
-        $widths = [
-            2  => 16, // Tanggal
-            3  => 20, // Nomor #
-            4  => 24, // Pemasok
-            5  => 16, // Kode #
-            6  => 32, // Nama Barang
-            7  => 12, // Kuantitas
-            8  => 16, // Harga
-            9  => 18, // Total Harga
-            10 => 22, // Nama Proyek
-            11 => 22, // Nama Departemen
-        ];
-        foreach ($widths as $idx => $w) {
-            $writer->setColumnWidth($idx, $w);
+        foreach ($columnKeys as $i => $key) {
+            $colIdx = 2 + $i;
+            $writer->setColumnWidth($colIdx, self::COLUMN_WIDTHS[$key] ?? 18);
+
+            // Right-align untuk kolom currency.
+            if (in_array($key, self::RIGHT_ALIGNED, true)) {
+                $writer->setColumnStyle($colIdx, 5);
+            }
         }
 
-        // Harga (col H = 8) & Total Harga (col I = 9) — align kanan.
-        $writer->setColumnStyle(8, 5);
-        $writer->setColumnStyle(9, 5);
-
-        // Data rows.
         $rowIdx = $headerRow + 1;
         foreach ($this->buildQuery($request)->orderBy('wh_purchase_order_detail.id')->cursor() as $r) {
             $d = $this->transform($r);
-
-            $writer->addRow($rowIdx++, 2, [
-                $d['po_date'],
-                $d['po_number'],
-                $d['supplier_name'],
-                $d['item_code'],
-                $d['item_name'],
-                $d['qty'],
-                $d['price'],
-                $d['total'],
-                $d['project_name'],
-                $d['department_name'],
-            ]);
+            $writer->addRow($rowIdx++, 2, $this->pickRow($d, $columnKeys, fn ($row, $k) => $row[$k] ?? ''));
         }
 
         $filename = sprintf(

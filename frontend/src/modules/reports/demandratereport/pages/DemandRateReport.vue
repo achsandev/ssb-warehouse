@@ -4,6 +4,7 @@ import type { DataTableHeader } from 'vuetify'
 import BaseSearchInput from '@/components/base/BaseSearchInput.vue'
 import BaseRefreshButton from '@/components/base/BaseRefreshButton.vue'
 import ExportDialog, { type ExportPayload } from '@/modules/reports/_shared/components/ExportDialog.vue'
+import { demandRateColumns } from '@/modules/reports/_shared/reportColumns'
 import { useDemandRateReportStore } from '@/stores/demand_rate_report'
 import { useTranslate } from '@/composables/useTranslate'
 import { useAbility } from '@/composables/useAbility'
@@ -76,6 +77,7 @@ const handleExportSubmit = async (payload: ExportPayload) => {
     <export-dialog
         v-if="exportDialog" v-model="exportDialog"
         :loading="store.exporting"
+        :columns="demandRateColumns"
         @submit="handleExportSubmit" @close="exportDialog = false"
     />
 </template>

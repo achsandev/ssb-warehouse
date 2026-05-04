@@ -12,8 +12,12 @@ class ItemUsageDetailResource extends JsonResource
         return [
             'uid'  => $this->uid,
             'item' => $this->whenLoaded('item', fn () => [
-                'uid'  => $this->item->uid,
-                'name' => $this->item->name,
+                'uid'         => $this->item->uid,
+                'name'        => $this->item->name,
+                // Field tambahan untuk print-out (kode + part number + harga).
+                'code'        => $this->item->code ?? null,
+                'part_number' => $this->item->part_number ?? null,
+                'price'       => $this->item->price ?? null,
             ]),
             'unit' => $this->whenLoaded('unit', fn () => [
                 'uid'    => $this->unit->uid,

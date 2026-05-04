@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Models\ItemUsageDetail;
@@ -15,15 +16,36 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StockUsageReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'stock-usage-report';
 
     private const DATE_COLUMN = 'wh_item_usage.usage_date';
 
-    private const HEADERS = [
-        'Tanggal', 'Kode Barang', 'Nama Barang', 'Kuantitas', 'Nomor #',
-        'Nama Departemen', 'Nama Proyek',
+    /**
+     * Whitelist kolom export. Key = identifier yang dikirim FE (lewat
+     * `columns[]`), value = header label di file XLSX. Urutan di sini
+     * jadi default ordering kalau user tidak filter.
+     */
+    private const COLUMN_DEFS = [
+        'usage_date'      => 'Tanggal',
+        'item_code'       => 'Kode Barang',
+        'item_name'       => 'Nama Barang',
+        'usage_qty'       => 'Kuantitas',
+        'usage_number'    => 'Nomor #',
+        'department_name' => 'Nama Departemen',
+        'project_name'    => 'Nama Proyek',
+    ];
+
+    /** Lebar kolom default per-key (dipakai saat set column width). */
+    private const COLUMN_WIDTHS = [
+        'usage_date'      => 16,
+        'item_code'       => 16,
+        'item_name'       => 32,
+        'usage_qty'       => 12,
+        'usage_number'    => 20,
+        'department_name' => 22,
+        'project_name'    => 24,
     ];
 
     public function index(FilterRequest $request): JsonResponse
@@ -60,38 +82,36 @@ class StockUsageReportController extends Controller
         $fmt = fn ($d) => $d ? Carbon::parse($d)->locale('id')->translatedFormat('d M Y') : '-';
         $periode = 'Dari '.$fmt($min).' s/d '.$fmt($max);
 
+        // Resolve kolom terpilih (whitelist-enforced). Kalau user tidak
+        // pilih apa-apa → semua kolom default.
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+        $headers = $this->pickHeaders($columnKeys, self::COLUMN_DEFS);
+
+        // Range merge title menyesuaikan jumlah kolom yang dipilih.
+        $colCount = count($columnKeys);
+        $endColLetter = $this->columnLetter(1 + $colCount); // B=2, jadi B + (n-1)
+
         $writer = new XlsxReportWriter('Pemakaian Persediaan');
 
-        // Judul — merge B..H, center+middle.
         $writer
-            ->addMergedTitle(row: 2, startCol: 'B', endCol: 'H', text: 'PT. SUMBER SETIA BUDI', style: 1) // bold 14pt Arial
-            ->addMergedTitle(row: 3, startCol: 'B', endCol: 'H', text: 'Pemakaian Persediaan', style: 2) // bold 20pt Arial
-            ->addMergedTitle(row: 4, startCol: 'B', endCol: 'H', text: $periode, style: 3);            // 13pt Arial
+            ->addMergedTitle(row: 2, startCol: 'B', endCol: $endColLetter, text: 'PT. SUMBER SETIA BUDI', style: 1)
+            ->addMergedTitle(row: 3, startCol: 'B', endCol: $endColLetter, text: 'Pemakaian Persediaan', style: 2)
+            ->addMergedTitle(row: 4, startCol: 'B', endCol: $endColLetter, text: $periode, style: 3);
 
-        // Header tabel mulai dari B6 (row 5 sebagai spacer kosong).
         $headerRow = 6;
-        $writer->setHeader($headerRow, 2, self::HEADERS);
+        $writer->setHeader($headerRow, 2, $headers);
 
-        // Lebar kolom agar rapi (index 2..8 = B..H).
-        $widths = [2 => 16, 3 => 16, 4 => 32, 5 => 12, 6 => 20, 7 => 22, 8 => 24];
-        foreach ($widths as $idx => $w) {
-            $writer->setColumnWidth($idx, $w);
+        // Lebar kolom — pakai map per-key, fallback 18 untuk kolom unknown.
+        foreach ($columnKeys as $i => $key) {
+            $writer->setColumnWidth(2 + $i, self::COLUMN_WIDTHS[$key] ?? 18);
         }
 
-        // Data rows.
+        // Data rows — pick value sesuai key.
         $rowIdx = $headerRow + 1;
         foreach ($this->buildQuery($request)->orderBy('wh_item_usage_detail.id')->cursor() as $r) {
             $d = $this->transform($r);
-
-            $writer->addRow($rowIdx++, 2, [
-                $d['usage_date'],
-                $d['item_code'],
-                $d['item_name'],
-                $d['usage_qty'],
-                $d['usage_number'],
-                $d['department_name'],
-                $d['project_name'],
-            ]);
+            $values = $this->pickRow($d, $columnKeys, fn ($row, $k) => $row[$k] ?? '');
+            $writer->addRow($rowIdx++, 2, $values);
         }
 
         $filename = sprintf(
@@ -103,6 +123,7 @@ class StockUsageReportController extends Controller
 
         return $writer->streamResponse($filename);
     }
+
 
     /** @return array{0:?string,1:?string} */
     private function rangeForTitle(FilterRequest $request): array

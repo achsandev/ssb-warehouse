@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reports\Concerns\SelectsReportColumns;
 use App\Http\Controllers\Reports\Concerns\StreamsReportCsv;
 use App\Http\Requests\Reports\FilterRequest;
 use App\Services\Reports\XlsxReportWriter;
@@ -19,9 +20,28 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DemandRateReportController extends Controller
 {
-    use ApiResponse, StreamsReportCsv;
+    use ApiResponse, SelectsReportColumns, StreamsReportCsv;
 
     private const SLUG = 'demand-rate-report';
+
+    /**
+     * Whitelist kolom export di luar blok bulan (pivot bulan selalu tampil).
+     * Kolom 'months_pivot' adalah pseudo-key — direpresentasikan sebagai
+     * blok kolom dinamis per-bulan.
+     */
+    private const COLUMN_DEFS = [
+        'part_number'  => 'Part System',
+        'desc'         => "Desc'",
+        'part_cat'     => "Part Cat'g",
+        'months_pivot' => 'Call & Demand (Bulanan)',
+        'grand_total'  => 'Grand Total',
+        'rata2'        => 'Rata2 consumption',
+        'call'         => 'Call',
+        'moving_cat'   => 'Moving Category',
+        'min'          => 'Min',
+        'max'          => 'Max',
+        'ss'           => 'SS',
+    ];
 
     public function index(FilterRequest $request): JsonResponse
     {
@@ -51,81 +71,78 @@ class DemandRateReportController extends Controller
     }
 
     /**
-     * Export XLSX pivot 12 bulan:
-     *  Part System | Desc' | Part Cat'g | Call&Demand (12 bulan) | Grand Total
-     *  | Rata2 consumption | Call | Moving Category | Min | Max | SS
+     * Export XLSX pivot bulanan dengan pemilihan kolom dinamis.
+     * Blok 'months_pivot' direpresentasikan sebagai N kolom (1 per bulan).
      */
     public function export(FilterRequest $request): StreamedResponse
     {
         [$rangeStart, $rangeEnd] = $this->resolveMonthRange($request);
         $months = $this->buildMonths($rangeStart, $rangeEnd);
+        $monthCount = count($months);
 
         $pivot = $this->buildPivot($rangeStart, $rangeEnd, $months);
+
+        // Kolom terpilih (dengan whitelist enforcement).
+        $columnKeys = $request->selectedColumns(array_keys(self::COLUMN_DEFS));
+
+        // Definisi style/width per-key (kecuali 'months_pivot' yang dinamis).
+        $widthFor = [
+            'part_number' => 14,  'desc' => 36,    'part_cat' => 14,
+            'grand_total' => 12,  'rata2' => 14,   'call' => 8,
+            'moving_cat'  => 18,  'min' => 8,      'max' => 8, 'ss' => 8,
+        ];
+        $styleFor = [
+            'part_number' => 0,   'desc' => 0,     'part_cat' => 0,
+            'grand_total' => 6,   'rata2' => 6,    'call' => 6,
+            'moving_cat'  => 8,   'min' => 6,      'max' => 6, 'ss' => 6,
+        ];
 
         $writer = new XlsxReportWriter('Demand Rate');
 
         $firstLabel = $months[0]['label'] ?? '-';
         $lastLabel  = end($months)['label'] ?? '-';
 
-        // Baris catatan di atas tabel (style 7 = italic 10pt).
         $writer->addCell(1, 1, '= all Hystorical Transaction, ' . $firstLabel . ' to ' . $lastLabel, 7);
         $writer->addCell(2, 1, 'For Inventory Forecast Planning RM Available Parts Scheduling', 7);
 
-        // Layout kolom:
-        //   A = Part System
-        //   B = Desc'
-        //   C = Part Cat'g
-        //   D..(D+n-1) = bulan-bulan
-        //   lalu Grand Total, Rata2 consumption, Call, Moving Category, Min, Max, SS
-        $monthCount   = count($months);
-        $monthStartCol = 4;                       // D
-        $monthEndIdx  = $monthStartCol + $monthCount - 1;
-        $monthStartLetter = $this->colLetter($monthStartCol);
-        $monthEndLetter   = $this->colLetter($monthEndIdx);
-
-        $grandIdx   = $monthEndIdx + 1;
-        $rataIdx    = $grandIdx + 1;
-        $callIdx    = $rataIdx + 1;
-        $movingIdx  = $callIdx + 1;
-        $minIdx     = $movingIdx + 1;
-        $maxIdx     = $minIdx + 1;
-        $ssIdx      = $maxIdx + 1;
-
-        // Header 2 baris (row 3 & 4). Fixed columns di-merge vertikal, "Call&Demand" horizontal.
         $headerTop    = 3;
         $headerBottom = 4;
 
-        $writer->addMerge($headerTop, $headerBottom, 'A', 'A', 'Part System', 4);
-        $writer->addMerge($headerTop, $headerBottom, 'B', 'B', "Desc'", 4);
-        $writer->addMerge($headerTop, $headerBottom, 'C', 'C', "Part Cat'g", 4);
+        // Render header & track posisi kolom per-key.
+        $colIdx = 1;
+        $monthStartCol = null;
+        $keyToColRange = []; // [key => [startCol, endCol]]
 
-        $writer->addMerge($headerTop, $headerTop, $monthStartLetter, $monthEndLetter, 'Call&Demand', 4);
-        foreach ($months as $i => $m) {
-            $writer->addCell($headerBottom, $monthStartCol + $i, $m['label'], 4);
+        foreach ($columnKeys as $key) {
+            if ($key === 'months_pivot') {
+                if ($monthCount === 0) {
+                    continue;
+                }
+                $monthStartCol = $colIdx;
+                $monthEndCol   = $colIdx + $monthCount - 1;
+                $writer->addMerge(
+                    $headerTop,
+                    $headerTop,
+                    $this->colLetter($monthStartCol),
+                    $this->colLetter($monthEndCol),
+                    'Call&Demand',
+                    4,
+                );
+                foreach ($months as $i => $m) {
+                    $writer->addCell($headerBottom, $monthStartCol + $i, $m['label'], 4);
+                    $writer->setColumnWidth($monthStartCol + $i, 9);
+                }
+                $keyToColRange[$key] = [$monthStartCol, $monthEndCol];
+                $colIdx = $monthEndCol + 1;
+                continue;
+            }
+
+            $letter = $this->colLetter($colIdx);
+            $writer->addMerge($headerTop, $headerBottom, $letter, $letter, self::COLUMN_DEFS[$key], 4);
+            $writer->setColumnWidth($colIdx, $widthFor[$key] ?? 12);
+            $keyToColRange[$key] = [$colIdx, $colIdx];
+            $colIdx++;
         }
-
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($grandIdx),  $this->colLetter($grandIdx),  'Grand Total',        4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($rataIdx),   $this->colLetter($rataIdx),   'Rata2 consumption',  4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($callIdx),   $this->colLetter($callIdx),   'Call',               4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($movingIdx), $this->colLetter($movingIdx), 'Moving Category',    4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($minIdx),    $this->colLetter($minIdx),    'Min',                4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($maxIdx),    $this->colLetter($maxIdx),    'Max',                4);
-        $writer->addMerge($headerTop, $headerBottom, $this->colLetter($ssIdx),     $this->colLetter($ssIdx),     'SS',                 4);
-
-        // Lebar kolom.
-        $writer->setColumnWidth(1, 14); // Part System
-        $writer->setColumnWidth(2, 36); // Desc'
-        $writer->setColumnWidth(3, 14); // Part Cat'g
-        for ($i = 0; $i < $monthCount; $i++) {
-            $writer->setColumnWidth($monthStartCol + $i, 9);
-        }
-        $writer->setColumnWidth($grandIdx,  12);
-        $writer->setColumnWidth($rataIdx,   14);
-        $writer->setColumnWidth($callIdx,   8);
-        $writer->setColumnWidth($movingIdx, 18);
-        $writer->setColumnWidth($minIdx,    8);
-        $writer->setColumnWidth($maxIdx,    8);
-        $writer->setColumnWidth($ssIdx,     8);
 
         // Data rows mulai row 5.
         $rowIdx = $headerBottom + 1;
@@ -144,29 +161,35 @@ class DemandRateReportController extends Controller
             }
 
             $nonZero = array_filter($monthlyValues, fn ($v) => $v > 0);
-            $min    = $nonZero !== [] ? min($nonZero) : 0;
-            $max    = $monthlyValues !== [] ? max($monthlyValues) : 0;
-            $rata   = $monthCount > 0 ? round($total / $monthCount, 2) : 0;
-            $moving = $callCnt >= 6 ? 'Fast Moving' : 'Slow Moving';
-            $ss     = $max * 2; // placeholder safety-stock
+            $values = [
+                'part_number' => $p['part_number'] ?? '-',
+                'desc'        => $p['desc'] ?? '-',
+                'part_cat'    => $p['part_cat'] ?? '-',
+                'grand_total' => $total,
+                'rata2'       => $monthCount > 0 ? round($total / $monthCount, 2) : 0,
+                'call'        => $callCnt,
+                'moving_cat'  => $callCnt >= 6 ? 'Fast Moving' : 'Slow Moving',
+                'min'         => $nonZero !== [] ? min($nonZero) : 0,
+                'max'         => $monthlyValues !== [] ? max($monthlyValues) : 0,
+                'ss'          => ($monthlyValues !== [] ? max($monthlyValues) : 0) * 2,
+            ];
 
-            // Fixed kolom.
-            $writer->addCell($rowIdx, 1, $p['part_number'] ?? '-', 0);
-            $writer->addCell($rowIdx, 2, $p['desc'] ?? '-', 0);
-            $writer->addCell($rowIdx, 3, $p['part_cat'] ?? '-', 0);
+            foreach ($columnKeys as $key) {
+                if (! isset($keyToColRange[$key])) {
+                    continue;
+                }
 
-            // Monthly counts — tampilkan kosong untuk 0 agar rapi mirip screenshot.
-            foreach ($monthlyValues as $i => $v) {
-                $writer->addCell($rowIdx, $monthStartCol + $i, $v > 0 ? $v : '', 6);
+                if ($key === 'months_pivot') {
+                    [$start] = $keyToColRange[$key];
+                    foreach ($monthlyValues as $i => $v) {
+                        $writer->addCell($rowIdx, $start + $i, $v > 0 ? $v : '', 6);
+                    }
+                    continue;
+                }
+
+                [$start] = $keyToColRange[$key];
+                $writer->addCell($rowIdx, $start, $values[$key] ?? '', $styleFor[$key] ?? 0);
             }
-
-            $writer->addCell($rowIdx, $grandIdx,  $total, 6);
-            $writer->addCell($rowIdx, $rataIdx,   $rata, 6);
-            $writer->addCell($rowIdx, $callIdx,   $callCnt, 6);
-            $writer->addCell($rowIdx, $movingIdx, $moving, 8); // red bold
-            $writer->addCell($rowIdx, $minIdx,    $min, 6);
-            $writer->addCell($rowIdx, $maxIdx,    $max, 6);
-            $writer->addCell($rowIdx, $ssIdx,     $ss, 6);
 
             $rowIdx++;
         }
